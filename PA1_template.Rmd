@@ -5,21 +5,121 @@ output:
     keep_md: true
 ---
 
+```{r setup, include=F}
+knitr::opts_chunk$set(echo = TRUE, 
+                      comment = NA, 
+                      fig.path = "./figures/",  
+                      fig.align = "center",
+                      fig.width = 7, 
+                      fig.height = 7, 
+                      message = FALSE,
+                      warning = FALSE
+                      )
+options(scipen = 999)
+knitr::knit_hooks$set(inline = function(x) {
+  knitr:::format_sci(x, 'md')
+})
+```
+
 
 ## Loading and preprocessing the data
 
+```{r}
+setwd("/Users/ktarkhan/RStat/Datafiles")
+data <- read.csv("/Users/ktarkhan/RStat/Datafiles/activity.csv")
+```
 
 
 ## What is mean total number of steps taken per day?
+```{r}
+totals <- tapply(data$steps, data$date, sum, na.rm=T)
+total_mean <- mean(totals, na.rm=T)
+total_median <- median(totals, na.rm=T)
+```
 
+The mean total number of steps per day in this study was `r round(total_mean)`. The median number of steps per day was `r total_median`.
+```{r}
+hist(totals, breaks=10, xlab="Number of steps per day", main="Total steps per day")
+```
 
 
 ## What is the average daily activity pattern?
-
+```{r}
+avg_activity <- tapply(data$steps, data$interval, mean, na.rm=T)
+plot(avg_activity, type="l", xlab="5 minute intervals from midnight", ylab="Average number of steps", main="Average number of steps per time inteval")
+max_int <- which.max(avg_activity)
+```
+The time of maximum average activity over the study period was `r floor(max_int/12)`:`r max_int%%12*5`.
 
 
 ## Imputing missing values
+```{r}
+library(dplyr)
+data <- mutate(data, missing=is.na(data$steps))
+nas <- tapply(data$missing, data$interval, sum)
+data$week <- weekdays(as.Date(data$date))
 
+misses <- data%>% filter(missing== TRUE)
+missed_days <- data.frame(date=unique(misses$date))
+missed_days$week <- weekdays(as.Date(missed_days$date))
+data_imputed <- data
+by_week <- data %>% group_by(week,interval) %>% summarise(avg=mean(steps, na.rm=T)) 
+by_week <- ungroup(by_week)
+all_rows <- nrow(data_imputed)
+for(i in 1:all_rows) {
+    if (is.na(data_imputed[i,"steps"])) {
+        data_imputed[i, "steps"] <-  as.numeric(by_week %>% 
+            filter(week ==data_imputed[i,"week"] & interval == data_imputed[i,"interval"]) %>%
+            select(avg))
+    }
+}
 
+totals_imp <- tapply(data_imputed$steps, data_imputed$date, sum, na.rm=T)
+total_mean_imp <- mean(totals_imp, na.rm=T)
+total_median_imp <- median(totals_imp, na.rm=T)
+
+hist(totals_imp, breaks=10, xlab="Number of steps per day", main="Total steps per day with imputed data")
+
+```
+Assuming that days of the week affect the patterns of behavior, we replace the missing values with the  average values for the corresponding day of the week and the interval.
+
+The mean total number of steps per day  with the missing data imputed was `r round(total_mean_imp)`. The median number of steps per day was `r round(total_median_imp)`.
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+```{r}
+weekly <- data %>% group_by(week) %>% summarise(total=sum(steps, na.rm=T))
+weekdays <- data %>% filter(week %in% c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday"))
+weekends <- data %>% filter (week %in% c("Saturday", "Sunday"))
+
+wd_totals <- tapply(weekdays$steps, weekdays$date, sum, na.rm=T)
+wd_total_mean <- mean(wd_totals, na.rm=T)
+wd_total_median <- median(wd_totals, na.rm=T)
+
+we_totals <- tapply(weekends$steps, weekends$date, sum, na.rm=T)
+we_total_mean <- mean(we_totals, na.rm=T)
+we_total_median <- median(we_totals, na.rm=T)
+
+
+wd_avg_activity <- tapply(weekdays$steps, weekdays$interval, mean, na.rm=T)
+wd_max_int <- which.max(wd_avg_activity)
+we_avg_activity <- tapply(weekends$steps, weekends$interval, mean, na.rm=T)
+we_max_int <- which.max(we_avg_activity)
+```
+
+
+```{r fig.width=8, fig.height= 5}
+par (mfrow=c(1,2))
+plot(wd_avg_activity, type="l", xlab="5 minute intervals from midnight", ylab="Average number of steps", main="On weekdays")
+
+plot(we_avg_activity, type="l", xlab="5 minute intervals from midnight", ylab="Average number of steps", main="On weekends")
+mtext("Average number of steps per time inteval", side = 3,, line=-1, outer=T)
+```
+The time of maximum average activity on weekdays was `r floor(wd_max_int/12)`:`r wd_max_int%%12*5`.  
+The time of maximum average activity on weekends was `r floor(we_max_int/12)`:`r we_max_int%%12*5`. They are close, weekends peaking a little later than weekdays.
+
+The mean total number of steps per day on weekdays was `r round(wd_total_mean)`. The median number of steps on weekdays was `r wd_total_median`. The mean total number of steps per day on weekends was `r round(we_total_mean)`. The median number of steps on weekends was `r we_total_median`. Evidently the subjects walked more on weekends than on weekdays and the activity is distributed over the entire day more evenly on weekends.
+
+
+
+
